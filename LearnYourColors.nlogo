@@ -1,12 +1,12 @@
+extensions [table]
+
 globals [
- alphabet colnums initcolnames initcolvals learnernames learnervals deathmean nestcounts
+ alphabet colnums initcols learnernames learnervals deathmean nestcounts
 ]
 
-turtles-own [
- colnames 
- colvals 
+turtles-own [ 
+ cols 
  numofcols 
- coldist 
  colevid 
  nest 
  age ; Age-Stage 0-40 Infant, 41-80 Child, 81-100 Young Adult, 101-140 Adult, 141- Elder
@@ -18,8 +18,7 @@ to setup
   clear-all
   set alphabet ["a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m" "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"] 
   set colnums n-values 100 [? + 20]
-   ;[0 1 2 3 4 5 6 7 8 9 10 
-   ; 11 12 13 14 15 16 17 18 19 20 
+   ; [20 
    ; 21 22 23 24 25 26 27 28 29 30 
    ; 31 32 33 34 35 36 37 38 39 40 
    ; 41 42 43 44 45 46 47 48 49 50 
@@ -29,14 +28,11 @@ to setup
    ; 81 82 83 84 85 86 87 88 89 90
    ; 91 92 93 94 95 96 97 98 99 100
    ; 101 102 103 104 105 106 107 108 109 110
-   ; 111 112 113 114 115 116 117 118 119 120
-   ; 121 122 123 124 125 126 127 128 129 130
-   ; 131 132 133 134 135 136 137 138 139] 
+   ; 111 112 113 114 115 116 117 118 119 120] 
   ask patches [colourpatch]
   ask n-of (count patches / 16) patches [splash] 
   initnamecols
-  show initcolnames
-  show initcolvals
+  show initcols
   ask n-of numberofnests patches 
   [
     sprout 50 / numberofnests
@@ -55,7 +51,7 @@ end
 to runplot
   set-current-plot "Number of Colours"
   set-plot-x-range 0 initnumofcols + 2
-  histogram [length colnames] of turtles  
+  histogram [table:length cols] of turtles  
   set-current-plot "Colour"
   set-plot-y-range 0 100
   set-histogram-num-bars 140
@@ -100,8 +96,13 @@ to splash
 end
 
 to initnamecols
-  set initcolnames n-of initnumofcols alphabet
-  set initcolvals n-of initnumofcols colnums
+  set initcols table:make
+  let colnames n-of initnumofcols alphabet 
+  foreach n-of initnumofcols colnums 
+  [
+    table:put initcols first colnames ?
+    set colnames bf colnames
+  ]
 end
 
 to setupturtles
@@ -117,16 +118,18 @@ to setupturtles
 end
 
 to setupspeakercols
-  set colnames initcolnames
-  set colvals initcolvals
-  set colevid n-of initnumofcols n-values 26 [1000]
+  set cols initcols 
+  set colevid table:make
+  foreach table:keys cols 
+  [
+    table:put colevid ? 1000
+  ]
   set nest patch-here
 end
 
 to setuplistenercols
-  set colnames []
-  set colvals []
-  set colevid []
+  set cols table:make
+  set colevid table:make
   set nest patch-here
 end
 
@@ -183,102 +186,167 @@ to givebirth?
 end
 
 to signal
-  if age > 40 and length colvals > 0
+  if age > 40 and table:length cols > 0
   [
-    set coldist []
-    foreach colvals [set coldist lput (abs (? - colourvalue)) coldist]
-    let colname item position min coldist coldist colnames
+    let coldist 141
+    let mindist 140
+    let colname "0"
+    foreach table:keys cols 
+    [
+      set coldist (abs (table:get cols ? - colourvalue))
+      if coldist < mindist
+      [
+        set mindist coldist
+        set colname ?
+      ]
+    ]
     let colval colourvalue
     ask turtles in-radius signalradius [learn colval colname]
   ]
 end
   
 to learn [colval colname]
-  ifelse member? colname colnames
+  ifelse table:has-key? cols colname
   [
-    let itempos (position colname colnames)
-    set colevid replace-item itempos colevid ((item itempos colevid) + 0.01)
-    let curevid item itempos colevid
+    table:put colevid colname ((table:get colevid colname) + 0.01)
+    let curevid table:get colevid colname
     let evidnum mean (list curevid age) / 10
     if evidnum <= 1 [set evidnum 1.01]
     if evidnum >= 100 [set evidnum 100]
-    set coldist []
-    foreach colvals [set coldist lput (abs (? - colval)) coldist]
-    if position min coldist coldist != itempos [
-      let changeamount ((item itempos coldist) / evidnum)
-      ifelse colval < item itempos colvals [ 
-        let newdist []
-        foreach colvals [
-          ifelse ? - item itempos colvals < 0 [
-            set newdist lput abs (? - item itempos colvals) newdist
-          ]
-          [
-            set newdist lput 1000 newdist
-          ]
-        ]
-        let newpos position min newdist newdist
-        ifelse item newpos colvals = min colvals
+    let coldist 141
+    let mindist 140
+    let minname "0"
+    foreach table:keys cols 
+    [
+      set coldist (abs (table:get cols ? - colval))
+      if coldist < mindist
+      [
+        set mindist coldist
+        set minname ?
+      ]
+    ]
+    if minname != colname 
+    [
+      let changeamount (abs (table:get cols colname - colval) / evidnum)
+      ifelse colval < table:get cols colname 
+      [ 
+        set coldist 141
+        set mindist 140
+        set minname "0"
+        let mincolval 140
+        let mincolname "0"
+        foreach table:keys cols
         [
-          ifelse (item newpos colvals - changeamount) >= 0
+          if ? != colname
           [
-            set colvals replace-item newpos colvals (item newpos colvals - changeamount)   
+            if table:get cols ? < table:get cols colname
+            [
+              set coldist (table:get cols colname - table:get cols ?)
+              if coldist < mindist
+              [
+                set mindist coldist
+                set minname ?
+              ]
+            ]
           ]
+          if table:get cols ? < mincolval
           [
-            set colvals replace-item newpos colvals (item newpos colvals / 2)   
+            set mincolval table:get cols ?
+            set mincolname ?
           ]
-          set colvals replace-item itempos colvals (item itempos colvals - changeamount)
+        ]
+        if minname = "0"
+        [
+          show "Lower"
+          show colval
+          show cols
+        ]
+        ifelse minname = mincolname
+        [
+          shift-col-lower(minname)(changeamount)
         ]
         [
-          set colvals replace-item itempos colvals (item itempos colvals - changeamount)
-          ifelse (item newpos colvals - changeamount / 2) >= 0
-          [
-            set colvals replace-item newpos colvals (item newpos colvals - changeamount / 2)   
-          ]
-          [
-            set colvals replace-item newpos colvals 0
-          ]
+          shift-col-lower(minname)(changeamount / 2)
         ]
-
+        shift-col-lower(colname)(changeamount)
       ]
       [
-        let newdist []
-        foreach colvals [
-          ifelse ? - item itempos colvals > 0 [
-            set newdist lput abs (? - item itempos colvals) newdist
-          ]
-          [
-            set newdist lput 1000 newdist
-          ]
-        ]
-        let newpos position min newdist newdist
-        ifelse item newpos colvals = max colvals
+        set coldist 141
+        set mindist 140
+        set minname "0"
+        let maxcolval 0
+        let maxcolname "0"
+        foreach table:keys cols
         [
-          ifelse (item newpos colvals + changeamount) <= 139
+          if ? != colname
           [
-            set colvals replace-item newpos colvals (item newpos colvals + changeamount)   
+            if table:get cols ? > table:get cols colname
+            [
+              set coldist (table:get cols ? - table:get cols colname)
+              if coldist < mindist
+              [
+                set mindist coldist
+                set minname ?
+              ]
+            ]
           ]
+          if table:get cols ? > maxcolval
           [
-            set colvals replace-item newpos colvals (item newpos colvals + ((139 - item newpos colvals) / 2))
+            set maxcolval table:get cols ?
+            set maxcolname ?
           ]
-          set colvals replace-item itempos colvals (item itempos colvals + changeamount)
+        ]
+        if minname = "0"
+        [
+          show "Higher"
+          show colval
+          show cols
+        ]
+        ifelse minname = maxcolname
+        [
+          shift-col-higher(minname)(changeamount)
         ]
         [
-          set colvals replace-item itempos colvals (item itempos colvals + changeamount)
-          ifelse (item newpos colvals + changeamount / 2) <= 139
-          [
-            set colvals replace-item newpos colvals (item newpos colvals + changeamount / 2)   
-          ]
-          [
-            set colvals replace-item newpos colvals 139
-          ]
+          shift-col-higher(minname)(changeamount / 2)
         ]
+        shift-col-higher(colname)(changeamount)
       ]
     ]
   ]
   [
-    set colnames lput colname colnames
-    set colvals lput colval colvals
-    set colevid lput 1 colevid 
+    let changeamount 0
+    foreach table:keys cols
+    [
+      let change (2 - random 4)
+      if change = 0 [set change 1]
+      if table:get cols ? = colval 
+      [
+        table:put cols ? (colval + change)
+        set changeamount change
+      ]
+    ]
+    table:put cols colname (colval - changeamount)
+    table:put colevid colname 1
+  ]
+end
+
+to shift-col-lower [colname changeamount]
+  ifelse (table:get cols colname - changeamount) >= 0
+  [
+    table:put cols colname (table:get cols colname - changeamount)   
+  ]
+  [
+    table:put cols colname (table:get cols colname / 2)      
+  ]
+end 
+
+to shift-col-higher [colname changeamount]
+  ifelse (table:get cols colname + changeamount) <= 139
+  [
+    table:put cols colname (table:get cols colname + changeamount)   
+  ]
+  [
+    table:put cols colname (table:get cols colname + ((139 - table:get cols colname) / 2))      
   ]
 end
 
@@ -297,10 +365,10 @@ to die?
 end
 
 to-report getcolour [colnum]
-  let colname item colnum initcolnames
-  ifelse member? colname colnames
+  let colname item colnum table:keys initcols
+  ifelse table:has-key? cols colname
   [
-    report item position colname colnames colvals
+    report table:get cols colname
   ]
   [
     report -10
@@ -550,7 +618,7 @@ plotcolnum
 plotcolnum
 0
 initnumofcols - 1
-0
+2
 1
 1
 NIL
